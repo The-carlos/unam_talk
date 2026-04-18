@@ -1,13 +1,25 @@
 import pandas as pd
 import pytest
 
-from src.predict import _normalize_categorical_booleans, dataframe_to_csv_bytes, generate_predictions
+from src.predict import (
+    _normalize_categorical_booleans,
+    dataframe_to_csv_bytes,
+    generate_predictions,
+    generate_top_k_predictions,
+)
 from src.validation import ValidationError
 
 
 class DummyModel:
     def predict(self, X):
         return ["yes" if value > 0 else "no" for value in X["columna_1"]]
+
+    def predict_proba(self, X):
+        return [[0.2, 0.8] for _ in range(len(X))]
+
+    @property
+    def classes_(self):
+        return ["no", "yes"]
 
 
 def test_generate_predictions_appends_prediction_column():
@@ -50,3 +62,18 @@ def test_normalize_categorical_booleans_casts_bool_values_to_strings():
     normalized = _normalize_categorical_booleans(df)
 
     assert normalized["Legendary"].tolist() == ["True", "False"]
+
+
+def test_generate_top_k_predictions_returns_ranked_results():
+    df = pd.DataFrame({"columna_1": [1], "columna_2": ["a"]})
+
+    ranked = generate_top_k_predictions(
+        model=DummyModel(),
+        input_df=df,
+        expected_columns=["columna_1", "columna_2"],
+        top_k=2,
+    )
+
+    assert ranked[0].label == "yes"
+    assert ranked[0].probability == 0.8
+    assert ranked[1].label == "no"
