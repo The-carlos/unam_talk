@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from src.predict import dataframe_to_csv_bytes, generate_predictions
+from src.predict import _normalize_categorical_booleans, dataframe_to_csv_bytes, generate_predictions
 from src.validation import ValidationError
 
 
@@ -37,3 +37,16 @@ def test_dataframe_to_csv_bytes_returns_utf8_csv():
 
     assert dataframe_to_csv_bytes(df) == b"a\n1\n"
 
+
+def test_normalize_categorical_booleans_casts_bool_values_to_strings():
+    df = pd.DataFrame(
+        {
+            "Legendary": [True, False],
+            "Type 1": ["Fire", "Water"],
+            "Total": [500, 530],
+        }
+    )
+
+    normalized = _normalize_categorical_booleans(df)
+
+    assert normalized["Legendary"].tolist() == ["True", "False"]

@@ -6,7 +6,10 @@ from dataclasses import dataclass
 
 import pandas as pd
 
-from src.validation import ValidationError, select_model_columns, validate_columns
+try:
+    from src.validation import ValidationError, select_model_columns, validate_columns
+except ModuleNotFoundError:
+    from validation import ValidationError, select_model_columns, validate_columns
 
 
 @dataclass(frozen=True)
@@ -15,6 +18,27 @@ class PredictionSummary:
     columns_received: int
     prediction_distribution: dict[str, int]
     messages: list[str]
+
+
+def _normalize_categorical_booleans(df: pd.DataFrame) -> pd.DataFrame:
+    """Cast boolean categorical values to sklearn-friendly string labels."""
+
+    result = df.copy()
+    for column in result.columns:
+        series = result[column]
+
+        if pd.api.types.is_bool_dtype(series):
+            result[column] = series.map(lambda value: "True" if value else "False")
+            continue
+
+        if pd.api.types.is_object_dtype(series):
+            non_null = series.dropna()
+            if not non_null.empty and non_null.map(lambda value: isinstance(value, bool)).any():
+                result[column] = series.map(
+                    lambda value: "True" if value is True else ("False" if value is False else value)
+                )
+
+    return result
 
 
 def generate_predictions(
@@ -30,6 +54,7 @@ def generate_predictions(
         raise ValidationError("; ".join(validation.messages))
 
     model_input = select_model_columns(input_df, expected_columns)
+    model_input = _normalize_categorical_booleans(model_input)
     predictions = model.predict(model_input)
 
     output_df = input_df.copy()
@@ -56,4 +81,3 @@ def dataframe_to_csv_bytes(df: pd.DataFrame) -> bytes:
     """Serialize a dataframe to CSV bytes for browser download."""
 
     return df.to_csv(index=False).encode("utf-8")
-

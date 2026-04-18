@@ -4,11 +4,19 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src.config import get_settings
-from src.features import normalize_column_names
-from src.model_io import ModelLoadError, load_model
-from src.predict import dataframe_to_csv_bytes, generate_predictions
-from src.validation import ValidationError, read_csv_file
+try:
+    from src.config import get_settings
+    from src.features import normalize_column_names
+    from src.model_io import ModelLoadError, load_model
+    from src.predict import dataframe_to_csv_bytes, generate_predictions
+    from src.validation import ValidationError, read_csv_file
+except ModuleNotFoundError:
+    # Fallback when Streamlit executes from the src/ directory context.
+    from config import get_settings
+    from features import normalize_column_names
+    from model_io import ModelLoadError, load_model
+    from predict import dataframe_to_csv_bytes, generate_predictions
+    from validation import ValidationError, read_csv_file
 
 
 st.set_page_config(page_title="ML Batch Prediction", page_icon="📄", layout="wide")
@@ -95,4 +103,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

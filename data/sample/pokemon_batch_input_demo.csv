@@ -1,0 +1,9 @@
+Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary
+Ghost,Poison,500,45,50,45,115,55,95,1,False
+Fire,Flying,534,78,84,78,109,85,100,1,False
+Water,,530,79,83,100,85,105,78,1,False
+Electric,,540,60,85,40,110,50,130,1,False
+Psychic,,500,40,45,65,100,120,90,1,False
+Dragon,Flying,600,91,134,95,100,100,80,1,False
+Fairy,,483,95,70,73,95,90,60,6,False
+Steel,Psychic,600,106,110,90,154,90,130,3,True
