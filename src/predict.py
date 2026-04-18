@@ -1,0 +1,59 @@
+"""Prediction orchestration independent from the Streamlit frontend."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import pandas as pd
+
+from src.validation import ValidationError, select_model_columns, validate_columns
+
+
+@dataclass(frozen=True)
+class PredictionSummary:
+    rows_processed: int
+    columns_received: int
+    prediction_distribution: dict[str, int]
+    messages: list[str]
+
+
+def generate_predictions(
+    model,
+    input_df: pd.DataFrame,
+    expected_columns: list[str],
+    prediction_column: str = "prediction",
+) -> tuple[pd.DataFrame, PredictionSummary]:
+    """Validate input data, run predictions, and append them to the original data."""
+
+    validation = validate_columns(input_df, expected_columns)
+    if not validation.is_valid:
+        raise ValidationError("; ".join(validation.messages))
+
+    model_input = select_model_columns(input_df, expected_columns)
+    predictions = model.predict(model_input)
+
+    output_df = input_df.copy()
+    output_df[prediction_column] = predictions
+
+    distribution = (
+        pd.Series(predictions, name=prediction_column)
+        .astype(str)
+        .value_counts(dropna=False)
+        .sort_index()
+        .to_dict()
+    )
+
+    summary = PredictionSummary(
+        rows_processed=len(output_df),
+        columns_received=len(input_df.columns),
+        prediction_distribution={str(key): int(value) for key, value in distribution.items()},
+        messages=validation.messages,
+    )
+    return output_df, summary
+
+
+def dataframe_to_csv_bytes(df: pd.DataFrame) -> bytes:
+    """Serialize a dataframe to CSV bytes for browser download."""
+
+    return df.to_csv(index=False).encode("utf-8")
+

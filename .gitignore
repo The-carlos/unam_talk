@@ -1,0 +1,51 @@
+# Environment
+.env
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local artifacts
+*.log
+tmp/
+temp/
+
+# Data: keep folder structure and small samples only
+data/raw/*
+data/interim/*
+data/processed/*
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+!data/sample/
+!data/sample/*.csv
+
+# Models can be large and should usually be tracked in artifact storage
+models/*
+!models/.gitkeep
+
+# Credentials and cloud secrets
+*.json
+*.pem
+*.key
+gcloud-config/
+
