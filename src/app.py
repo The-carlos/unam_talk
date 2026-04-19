@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pandas as pd
+import requests
 import streamlit as st
 
 try:
@@ -33,13 +34,91 @@ NUMERIC_FEATURE_CONFIG = {
     "Sp. Atk": {"min_value": 1, "max_value": 255, "value": 85, "step": 1},
     "Sp. Def": {"min_value": 1, "max_value": 255, "value": 75, "step": 1},
     "Speed": {"min_value": 1, "max_value": 255, "value": 80, "step": 1},
-    "Generation": {"min_value": 1, "max_value": 9, "value": 1, "step": 1},
 }
+
+FEATURE_LABELS_ES = {
+    "Type 1": "Tipo principal",
+    "Type 2": "Tipo secundario",
+    "Total": "Puntaje total",
+    "HP": "Puntos de salud (HP)",
+    "Attack": "Ataque",
+    "Defense": "Defensa",
+    "Sp. Atk": "Ataque especial",
+    "Sp. Def": "Defensa especial",
+    "Speed": "Velocidad",
+    "Legendary": "Es legendario",
+}
+
+FEATURE_HELP_ES = {
+    "Type 1": "Cada Pokemon tiene un tipo principal que define fortalezas y debilidades.",
+    "Type 2": "Algunos Pokemon tienen un segundo tipo.",
+    "Total": "Suma total de stats; sirve como referencia general de fuerza.",
+    "HP": "Puntos de salud: cuanto dano puede resistir antes de caer.",
+    "Attack": "Modificador base para ataques normales.",
+    "Defense": "Resistencia base contra ataques normales.",
+    "Sp. Atk": "Modificador base para ataques especiales.",
+    "Sp. Def": "Resistencia base contra ataques especiales.",
+    "Speed": "Define que Pokemon ataca primero en cada turno.",
+    "Legendary": "Indica si el Pokemon es legendario.",
+}
+
+POKEAPI_BASE_URL = "https://pokeapi.co/api/v2/pokemon"
 
 
 @st.cache_resource(show_spinner=False)
 def cached_model(model_path: str):
     return load_model(model_path)
+
+
+def _pokemon_api_candidates(name: str) -> list[str]:
+    cleaned = name.strip().lower()
+    aliases = {
+        "mr. mime": "mr-mime",
+        "farfetch'd": "farfetchd",
+        "nidoran♀": "nidoran-f",
+        "nidoran♂": "nidoran-m",
+    }
+
+    candidates = [
+        aliases.get(cleaned, cleaned),
+        cleaned.replace(" ", "-"),
+        cleaned.replace(" ", "-").replace(".", ""),
+        cleaned.replace(" ", "-").replace(".", "").replace("'", ""),
+    ]
+
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        if candidate and candidate not in seen:
+            seen.add(candidate)
+            ordered.append(candidate)
+    return ordered
+
+
+@st.cache_data(show_spinner=False, ttl=60 * 60 * 24)
+def fetch_pokemon_sprite_url(name: str) -> str | None:
+    for candidate in _pokemon_api_candidates(name):
+        url = f"{POKEAPI_BASE_URL}/{candidate}"
+        try:
+            response = requests.get(url, timeout=8)
+        except requests.RequestException:
+            continue
+
+        if response.status_code == 404:
+            continue
+        if response.status_code != 200:
+            continue
+
+        payload = response.json()
+        official_artwork = payload.get("sprites", {}).get("other", {}).get("official-artwork", {}).get("front_default")
+        if official_artwork:
+            return official_artwork
+
+        sprite = payload.get("sprites", {}).get("front_default")
+        if sprite:
+            return sprite
+
+    return None
 
 
 def _extract_categorical_options(model: Any) -> dict[str, list[str]]:
@@ -155,32 +234,37 @@ def _render_quiz_tab(model: Any, expected_columns: list[str]) -> None:
     with st.form("pokemon_quiz_form"):
         col_a, col_b = st.columns(2)
         with col_a:
-            type_1 = st.selectbox("Type 1", type_1_options, index=0)
-            type_2 = st.selectbox("Type 2", type_2_options, index=0)
+            type_1 = st.selectbox(FEATURE_LABELS_ES["Type 1"], type_1_options, index=0, help=FEATURE_HELP_ES["Type 1"])
+            type_2 = st.selectbox(FEATURE_LABELS_ES["Type 2"], type_2_options, index=0, help=FEATURE_HELP_ES["Type 2"])
             legendary = st.selectbox(
-                "Legendary",
+                FEATURE_LABELS_ES["Legendary"],
                 legendary_options,
                 index=legendary_options.index("False") if "False" in legendary_options else 0,
+                help=FEATURE_HELP_ES["Legendary"],
             )
 
         with col_b:
-            total = st.slider("Total", **NUMERIC_FEATURE_CONFIG["Total"])
-            hp = st.slider("HP", **NUMERIC_FEATURE_CONFIG["HP"])
-            attack = st.slider("Attack", **NUMERIC_FEATURE_CONFIG["Attack"])
-            defense = st.slider("Defense", **NUMERIC_FEATURE_CONFIG["Defense"])
+            total = st.slider(FEATURE_LABELS_ES["Total"], help=FEATURE_HELP_ES["Total"], **NUMERIC_FEATURE_CONFIG["Total"])
+            hp = st.slider(FEATURE_LABELS_ES["HP"], help=FEATURE_HELP_ES["HP"], **NUMERIC_FEATURE_CONFIG["HP"])
+            attack = st.slider(
+                FEATURE_LABELS_ES["Attack"], help=FEATURE_HELP_ES["Attack"], **NUMERIC_FEATURE_CONFIG["Attack"]
+            )
+            defense = st.slider(
+                FEATURE_LABELS_ES["Defense"], help=FEATURE_HELP_ES["Defense"], **NUMERIC_FEATURE_CONFIG["Defense"]
+            )
 
         col_c, col_d = st.columns(2)
         with col_c:
-            sp_atk = st.slider("Sp. Atk", **NUMERIC_FEATURE_CONFIG["Sp. Atk"])
-            sp_def = st.slider("Sp. Def", **NUMERIC_FEATURE_CONFIG["Sp. Def"])
+            sp_atk = st.slider(
+                FEATURE_LABELS_ES["Sp. Atk"], help=FEATURE_HELP_ES["Sp. Atk"], **NUMERIC_FEATURE_CONFIG["Sp. Atk"]
+            )
+            sp_def = st.slider(
+                FEATURE_LABELS_ES["Sp. Def"], help=FEATURE_HELP_ES["Sp. Def"], **NUMERIC_FEATURE_CONFIG["Sp. Def"]
+            )
         with col_d:
-            speed = st.slider("Speed", **NUMERIC_FEATURE_CONFIG["Speed"])
-            generation = st.slider("Generation", **NUMERIC_FEATURE_CONFIG["Generation"])
+            speed = st.slider(FEATURE_LABELS_ES["Speed"], help=FEATURE_HELP_ES["Speed"], **NUMERIC_FEATURE_CONFIG["Speed"])
 
         submit_quiz = st.form_submit_button("Descubrir mi Pokemon")
-
-    if not submit_quiz:
-        return
 
     quiz_input = {
         "Type 1": type_1,
@@ -192,9 +276,12 @@ def _render_quiz_tab(model: Any, expected_columns: list[str]) -> None:
         "Sp. Atk": sp_atk,
         "Sp. Def": sp_def,
         "Speed": speed,
-        "Generation": generation,
+        "Generation": 1,
         "Legendary": legendary,
     }
+
+    if not submit_quiz:
+        return
 
     try:
         quiz_df = pd.DataFrame([quiz_input])
@@ -216,20 +303,39 @@ def _render_quiz_tab(model: Any, expected_columns: list[str]) -> None:
         return
 
     best_match = top_matches[0]
-    st.success(f"Tu Pokemon mas probable es: {best_match.label} ({best_match.probability:.1%})")
+    st.markdown(
+        (
+            "<div style='background:#dcfce7;border:1px solid #86efac;border-radius:10px;padding:20px;"
+            "text-align:center;margin-bottom:14px;'>"
+            "<div style='font-size:16px;font-weight:600;color:#14532d;'>Tu Pokemon mas probable es</div>"
+            f"<div style='font-size:44px;line-height:1.1;font-weight:800;color:#14532d;'>{best_match.label}</div>"
+            f"<div style='font-size:24px;font-weight:700;color:#166534;'>{best_match.probability:.1%}</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+    sprite_url = fetch_pokemon_sprite_url(best_match.label)
+    if sprite_url:
+        st.markdown(
+            (
+                "<div style='text-align:center;margin:8px 0 12px 0;'>"
+                f"<img src='{sprite_url}' alt='{best_match.label}' style='width:260px;max-width:100%;'/>"
+                "</div>"
+            ),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.caption("No se encontro imagen para este Pokemon en PokeAPI.")
 
     st.subheader("Top-3 coincidencias")
     ranking_df = pd.DataFrame(
         {
             "rank": [index for index in range(1, len(top_matches) + 1)],
-            "pokemon": [item.label for item in top_matches],
-            "probabilidad": [f"{item.probability:.1%}" for item in top_matches],
+            "Pokemon": [item.label for item in top_matches],
+            "Probabilidad": [f"{item.probability:.1%}" for item in top_matches],
         }
     )
     st.dataframe(ranking_df, use_container_width=True, hide_index=True)
-
-    with st.expander("Ver perfil ingresado"):
-        st.dataframe(quiz_df, use_container_width=True, hide_index=True)
 
 
 def main() -> None:
