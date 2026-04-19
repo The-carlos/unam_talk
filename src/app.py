@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from typing import Any
 
 import pandas as pd
@@ -68,6 +69,25 @@ POKEAPI_BASE_URL = "https://pokeapi.co/api/v2/pokemon"
 @st.cache_resource(show_spinner=False)
 def cached_model(model_path: str):
     return load_model(model_path)
+
+
+def fetch_random_gen1_pokemon_sprite() -> dict[str, str] | None:
+    pokemon_id = random.randint(1, 151)
+    try:
+        response = requests.get(f"{POKEAPI_BASE_URL}/{pokemon_id}", timeout=8)
+        response.raise_for_status()
+        payload = response.json()
+    except requests.RequestException:
+        return None
+
+    name = str(payload.get("name", "")).strip()
+    official_artwork = payload.get("sprites", {}).get("other", {}).get("official-artwork", {}).get("front_default")
+    sprite = payload.get("sprites", {}).get("front_default")
+    image_url = official_artwork or sprite
+    if not name or not image_url:
+        return None
+
+    return {"name": name.title(), "image_url": str(image_url)}
 
 
 def _pokemon_api_candidates(name: str) -> list[str]:
@@ -341,8 +361,21 @@ def _render_quiz_tab(model: Any, expected_columns: list[str]) -> None:
 def main() -> None:
     settings = get_settings()
 
-    st.title("Pokemon ML Production Demo")
-    st.write("Demo para produccion ML: prediccion batch por CSV + quiz interactivo.")
+    if "header_pokemon" not in st.session_state:
+        st.session_state["header_pokemon"] = fetch_random_gen1_pokemon_sprite()
+
+    title_col, pokemon_col = st.columns([5, 1])
+    with title_col:
+        st.title("¿Quiénesese pokemoooon? (Pero con IA)")
+        st.write("Usa los poderes de la IA para predecir quién es ese pokemos basado en sus características.")
+    with pokemon_col:
+        header_pokemon = st.session_state.get("header_pokemon")
+        if header_pokemon:
+            st.image(
+                header_pokemon["image_url"],
+                caption=header_pokemon["name"],
+                use_container_width=True,
+            )
 
     try:
         model = cached_model(str(settings.model_path))
@@ -354,7 +387,23 @@ def main() -> None:
     expected_columns = _resolve_expected_columns(settings, model)
 
     with st.sidebar:
-        st.header("Configuracion")
+        st.header("Sobre Este Proyecto")
+        st.write(
+            "Demo de ML en produccion: entrenamos un modelo clasico para predecir tu Pokemon "
+            "y lo llevamos a una app lista para desplegar."
+        )
+        st.markdown(
+            "¡Te reto a desplegar este modelo por tu propia cuenta! "
+            "Todo el código de este proyecto esta disponible en este repo:\n\n"
+            "https://github.com/The-carlos/unam_talk"
+        )
+        st.markdown(
+            "### Conectemos\n"
+            "Gracias por pasar por la demo. Si te gustó, me dara mucho gusto que conectemos en redes:\n\n"
+            "[¡Sigueme por acá!](https://linktr.ee/theCarlos?utm_source=linktree_profile_share&ltsid=b1b756c5-89af-4ad3-be61-5fc77dd11b87)"
+        )
+        st.divider()
+        st.caption("Configuracion tecnica")
         st.caption("Modelo")
         st.code(str(settings.model_path))
         st.caption("Columnas esperadas")
