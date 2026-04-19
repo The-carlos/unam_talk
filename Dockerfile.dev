@@ -1,4 +1,6 @@
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
+
+ENV CLOUDSDK_PYTHON=/usr/local/bin/python3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \

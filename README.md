@@ -1,34 +1,36 @@
 # ¡Deja de usar notebooks! Prepara tus modelos para funcionar en el mundo real
 
-Proyecto demo para una charla universitaria sobre **ML en producción**.
+Proyecto demo para una charla universitaria sobre ML en produccion.
 
-La idea es mostrar, de punta a punta, cómo pasar de un notebook a un servicio desplegable:
+Objetivo: mostrar un flujo completo desde notebook hasta despliegue real.
 
-1. Entrenar un modelo clásico (KNN) para predecir qué Pokémon eres.
-2. Empaquetar todo en una app con Streamlit.
+1. Entrenar un modelo clasico (KNN) para predecir que Pokemon eres.
+2. Servir el modelo en una app con Streamlit.
 3. Contenerizar con Docker.
 4. Publicar imagen en Google Artifact Registry.
 5. Desplegar en Google Cloud Run.
 
-## Estado actual
+## Estado actual (Abril 2026)
 
-Implementado en esta versión:
+Implementado:
 
-- Pipeline de entrenamiento en notebook: `notebooks/01_train_model.ipynb`.
-- Artefactos del modelo ya generados en `models/`.
-- Frontend Streamlit para **predicción batch por CSV**.
-- Validación de entrada, resumen de predicciones y descarga del CSV resultado.
-- Dockerfiles (dev/prod), `cloudbuild.yaml` y `service.yaml` para despliegue.
-- Tests unitarios base para validación/predicción.
+- Notebook de entrenamiento completo: `notebooks/01_train_model.ipynb`.
+- Pipeline entrenado y exportado en `models/`.
+- App Streamlit con 2 secciones:
+  - Prediccion batch por CSV.
+  - Quiz interactivo con Top-3 via `predict_proba`.
+- Integracion con PokeAPI para mostrar imagen del Pokemon Top-1 en el quiz.
+- Header con Pokemon aleatorio de Gen 1 al abrir/refrescar.
+- Sidebar con descripcion del proyecto, reto de despliegue y links.
+- Dockerfiles dev/prod, `cloudbuild.yaml`, `service.yaml`, `commands.md`.
+- Tests unitarios de validacion/prediccion pasando.
 
-Pendiente para la demo final:
-
-- Segunda sección tipo **Quiz interactivo** (inputs manuales + top 3 candidatos).
-
-## Estructura del proyecto
+## Estructura
 
 ```text
 ml-production-app/
+├── .devcontainer/
+│   └── devcontainer.json
 ├── data/
 │   ├── raw/
 │   └── sample/
@@ -51,21 +53,23 @@ ml-production-app/
 ├── cloudbuild.yaml
 ├── service.yaml
 ├── commands.md
+├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
-## Modelo y features
+## Modelo
 
-Notebook principal: `notebooks/01_train_model.ipynb`.
+Notebook principal: `notebooks/01_train_model.ipynb`
 
 - Target: `Name`
-- Modelo: `KNeighborsClassifier` (`n_neighbors=3`, `weights="distance"`)
-- Artefactos exportados:
-  - `models/pokemon_knn_pipeline.joblib`
-  - `models/model.pkl`
-- Metadata: `models/pokemon_metadata.json`
+- Modelo: `KNeighborsClassifier(n_neighbors=3, weights="distance")`
+- Artefactos:
+  - `models/pokemon_knn_pipeline.joblib` (principal para inferencia)
+  - `models/model.pkl` (compatibilidad)
+  - `models/pokemon_metadata.json`
 
-Features de entrada esperadas por el pipeline:
+Features esperadas:
 
 - `Type 1`
 - `Type 2`
@@ -79,14 +83,66 @@ Features de entrada esperadas por el pipeline:
 - `Generation`
 - `Legendary`
 
-## Requisitos
+## Notebook: seccion extra KNN
 
-- Python 3.11
-- `pip`
-- Docker (opcional, para contenedores)
-- Google Cloud SDK (opcional, para despliegue)
+Se agrego una seccion para visualizar vecinos mas cercanos del KNN:
 
-## Setup local
+- `## 7. Visualize nearest neighbors (KNN intuition)`
+
+Esta seccion muestra:
+
+- fila query de prueba,
+- vecinos mas cercanos del train,
+- distancia por vecino,
+- barplot horizontal de cercania.
+
+## App Streamlit
+
+Archivo principal: `src/app.py`
+
+### Seccion 1: Batch CSV
+
+- Subida de CSV.
+- Validacion de columnas y lectura segura.
+- Prediccion batch.
+- Resumen de metricas.
+- Descarga de `predictions.csv`.
+
+Archivo de muestra:
+
+- `data/sample/pokemon_batch_input_demo.csv`
+
+### Seccion 2: Quiz
+
+- Inputs manuales para features.
+- `Generation` fija en `1` (no seleccionable en UI).
+- Resultado principal destacado (caja verde, texto centrado y grande).
+- Top-3 coincidencias con probabilidad.
+- Imagen del Pokemon Top-1 via PokeAPI.
+
+## Variables de entorno
+
+`.env.example` ya esta alineado al modelo Pokemon.
+
+Ejemplo recomendado:
+
+```bash
+MODEL_PATH=models/pokemon_knn_pipeline.joblib
+EXPECTED_COLUMNS="Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary"
+PREDICTION_COLUMN=prediction
+```
+
+Importante: tu codigo usa `os.getenv(...)`, asi que `.env` no se carga solo.
+
+Carga manual:
+
+```bash
+set -a
+source .env
+set +a
+```
+
+## Setup local (sin contenedor)
 
 ```bash
 python -m venv .venv
@@ -94,55 +150,34 @@ source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements-dev.txt
 cp .env.example .env
-```
-
-Variables de entorno recomendadas para la demo Pokémon:
-
-```bash
-export MODEL_PATH=models/pokemon_knn_pipeline.joblib
-export EXPECTED_COLUMNS="Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary"
-export PREDICTION_COLUMN=prediction
-```
-
-## Ejecutar la app
-
-```bash
+set -a && source .env && set +a
 streamlit run src/app.py
 ```
 
-Funcionalidad actual en UI:
+## Setup con Dev Container (recomendado para deploy)
 
-- Carga de `.csv`
-- Validación de columnas
-- Predicción batch
-- Métricas rápidas:
-  - filas procesadas
-  - columnas recibidas
-  - cantidad de clases predichas
-- Distribución de predicciones
-- Descarga de `predictions.csv`
+Raiz de repo: `ml-production-app/`
 
-## Formato de entrada CSV
+Config activa:
 
-El CSV debe contener las columnas esperadas por el modelo.
+- `.devcontainer/devcontainer.json` (dentro de `ml-production-app`)
+- build con `Dockerfile.dev`
 
-Ejemplo mínimo de cabecera:
+`Dockerfile.dev` instala `google-cloud-cli`, por eso este entorno es el indicado para `gcloud`.
 
-```csv
-Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary
-```
+### Si `gcloud` no existe
 
-Nota: los archivos en `data/sample/*.csv` son genéricos de scaffold y se pueden reemplazar por muestras Pokémon reales para la demo.
+Normalmente significa que no estas dentro del contenedor reconstruido.
 
-## Entrenamiento / reentrenamiento
+Pasos:
 
-Ejecuta:
+1. VS Code: `Dev Containers: Rebuild and Reopen in Container`
+2. Nueva terminal
+3. Verificar:
 
 ```bash
-jupyter lab notebooks/01_train_model.ipynb
+gcloud --version
 ```
-
-El notebook entrena un `Pipeline` completo (preprocesamiento + modelo) y lo exporta. Eso evita duplicar lógica de transformación en producción.
 
 ## Tests
 
@@ -150,21 +185,17 @@ El notebook entrena un `Pipeline` completo (preprocesamiento + modelo) y lo expo
 pytest
 ```
 
-Cobertura actual orientada a:
+Estado actual esperado: tests verdes.
 
-- validación de CSV
-- validación de columnas
-- flujo de predicción y serialización de salida
+## Docker (produccion)
 
-## Docker
-
-Build de imagen de producción:
+Build:
 
 ```bash
 docker build -f Dockerfile.prod -t ml-prediction-app:latest .
 ```
 
-Run local de contenedor:
+Run:
 
 ```bash
 docker run --rm -p 4000:4000 \
@@ -174,13 +205,9 @@ docker run --rm -p 4000:4000 \
   ml-prediction-app:latest
 ```
 
-## Despliegue en Google Cloud
+## Despliegue GCP
 
-Este repo ya incluye lo necesario para pipeline de imagen + deploy:
-
-- `cloudbuild.yaml` para build/push en Artifact Registry.
-- `service.yaml` para Cloud Run.
-- `commands.md` con comandos paso a paso.
+Referencia completa: `commands.md`
 
 Variables sugeridas:
 
@@ -193,7 +220,7 @@ export IMAGE_TAG=latest
 export CLOUD_RUN_SERVICE=ml-prediction-service
 ```
 
-Build/push con Cloud Build:
+Build + push con Cloud Build:
 
 ```bash
 gcloud builds submit \
@@ -202,7 +229,7 @@ gcloud builds submit \
   .
 ```
 
-Deploy en Cloud Run:
+Deploy Cloud Run:
 
 ```bash
 gcloud run deploy "${CLOUD_RUN_SERVICE}" \
@@ -213,17 +240,56 @@ gcloud run deploy "${CLOUD_RUN_SERVICE}" \
   --set-env-vars MODEL_PATH=models/pokemon_knn_pipeline.joblib,EXPECTED_COLUMNS="Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary",PREDICTION_COLUMN=prediction
 ```
 
-## Seguridad y buenas prácticas
+## Checklist de continuidad (post-rebuild)
 
-- No versionar credenciales ni llaves de servicio.
-- Cargar solo modelos confiables (`.pkl`, `.pickle`, `.joblib`) generados por tu pipeline.
-- Mantener entrenamiento y serving desacoplados.
-- Tratar validación de entrada como primera línea de defensa.
+Ejecuta esto despues del rebuild para continuar rapido:
 
-## Roadmap corto para la charla
+1. Entrar al repo:
 
-1. Implementar sección **Quiz** en Streamlit (inputs manuales).
-2. Usar `predict_proba` para mostrar **Top-1 + Top-2 + Top-3** Pokémon.
-3. Añadir explicación simple del resultado (features más influyentes o distancia en KNN).
-4. Reemplazar `data/sample` por ejemplos Pokémon reales para demo en vivo.
-5. Agregar smoke test del contenedor y checklist pre-charla (build + deploy + URL final).
+```bash
+cd /workspaces/ml_for_production_talk/ml-production-app
+```
+
+2. Verificar entorno:
+
+```bash
+gcloud --version
+python --version
+```
+
+3. Cargar variables:
+
+```bash
+set -a && source .env && set +a
+```
+
+4. Probar app:
+
+```bash
+streamlit run src/app.py
+```
+
+5. Probar tests:
+
+```bash
+pytest
+```
+
+6. Inicializar GCP:
+
+```bash
+gcloud init
+gcloud auth application-default login
+```
+
+7. Seguir `commands.md` para Artifact Registry + Cloud Run.
+
+## Riesgos / notas
+
+- PokeAPI es dependencia externa de red (si falla, la app sigue pero puede no mostrar imagen).
+- El modelo usa pickle/joblib: cargar solo artefactos confiables.
+- No versionar secretos/credenciales.
+
+## Repo
+
+- GitHub: https://github.com/The-carlos/unam_talk
