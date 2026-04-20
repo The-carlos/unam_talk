@@ -1,52 +1,48 @@
 # ¡Deja de usar notebooks! Prepara tus modelos para funcionar en el mundo real
 
-Proyecto demo para una charla universitaria sobre ML en produccion.
+Demo de ML en produccion para charla universitaria.
 
-Objetivo: mostrar un flujo completo desde notebook hasta despliegue real.
+El proyecto muestra un flujo end-to-end:
 
-1. Entrenar un modelo clasico (KNN) para predecir que Pokemon eres.
-2. Servir el modelo en una app con Streamlit.
-3. Contenerizar con Docker.
-4. Publicar imagen en Google Artifact Registry.
-5. Desplegar en Google Cloud Run.
+1. Entrenamiento en notebook.
+2. Empaquetado del modelo serializado.
+3. App de inferencia en Streamlit.
+4. Contenerizacion con Docker.
+5. Build y push con Cloud Build.
+6. Despliegue declarativo en Cloud Run con `service.yaml`.
 
-## Estado actual (Abril 2026)
+## Estado actual (actualizado: 2026-04-19)
 
-Implementado:
+Implementado y validado:
 
-- Notebook de entrenamiento completo: `notebooks/01_train_model.ipynb`.
-- Pipeline entrenado y exportado en `models/`.
-- App Streamlit con 2 secciones:
+- Notebook de entrenamiento: `notebooks/01_train_model.ipynb`.
+- Pipeline entrenado exportado en `models/pokemon_knn_pipeline.joblib`.
+- App Streamlit funcional con 2 flujos:
   - Prediccion batch por CSV.
-  - Quiz interactivo con Top-3 via `predict_proba`.
-- Integracion con PokeAPI para mostrar imagen del Pokemon Top-1 en el quiz.
-- Header con Pokemon aleatorio de Gen 1 al abrir/refrescar.
-- Sidebar con descripcion del proyecto, reto de despliegue y links.
-- Dockerfiles dev/prod, `cloudbuild.yaml`, `service.yaml`, `commands.md`.
-- Tests unitarios de validacion/prediccion pasando.
+  - Quiz interactivo con Top-3 (`predict_proba`).
+- Integracion con PokeAPI para mostrar sprite del Top-1 en quiz.
+- Contenedores dev/prod listos (`Dockerfile.dev`, `Dockerfile.prod`).
+- Build remoto en GCP exitoso con `cloudbuild.yaml`.
+- Servicio desplegado en Cloud Run con `service.yaml`.
+- Tests unitarios pasando (`8 passed`, pytest).
 
-## Estructura
+URL del ultimo despliegue validado:
+
+- `https://ml-prediction-service-wxuhlxmv7a-uc.a.run.app`
+
+## Estructura del repositorio
 
 ```text
-ml-production-app/
+.
 ├── .devcontainer/
-│   └── devcontainer.json
 ├── data/
 │   ├── raw/
+│   ├── interim/
+│   ├── processed/
 │   └── sample/
 ├── models/
-│   ├── pokemon_knn_pipeline.joblib
-│   ├── model.pkl
-│   └── pokemon_metadata.json
 ├── notebooks/
-│   └── 01_train_model.ipynb
 ├── src/
-│   ├── app.py
-│   ├── config.py
-│   ├── features.py
-│   ├── model_io.py
-│   ├── predict.py
-│   └── validation.py
 ├── tests/
 ├── Dockerfile.dev
 ├── Dockerfile.prod
@@ -69,7 +65,7 @@ Notebook principal: `notebooks/01_train_model.ipynb`
   - `models/model.pkl` (compatibilidad)
   - `models/pokemon_metadata.json`
 
-Features esperadas:
+Features esperadas por inferencia:
 
 - `Type 1`
 - `Type 2`
@@ -83,58 +79,40 @@ Features esperadas:
 - `Generation`
 - `Legendary`
 
-## Notebook: seccion extra KNN
-
-Se agrego una seccion para visualizar vecinos mas cercanos del KNN:
-
-- `## 7. Visualize nearest neighbors (KNN intuition)`
-
-Esta seccion muestra:
-
-- fila query de prueba,
-- vecinos mas cercanos del train,
-- distancia por vecino,
-- barplot horizontal de cercania.
-
-## App Streamlit
+## Aplicacion Streamlit
 
 Archivo principal: `src/app.py`
 
-### Seccion 1: Batch CSV
+### 1) Prediccion batch por CSV
 
-- Subida de CSV.
-- Validacion de columnas y lectura segura.
-- Prediccion batch.
-- Resumen de metricas.
+- Carga de archivo `.csv`.
+- Validacion de columnas.
+- Prediccion del lote completo.
+- Resumen de metricas y distribucion.
 - Descarga de `predictions.csv`.
 
-Archivo de muestra:
+CSV de ejemplo:
 
 - `data/sample/pokemon_batch_input_demo.csv`
 
-### Seccion 2: Quiz
+### 2) Quiz Pokemon
 
-- Inputs manuales para features.
-- `Generation` fija en `1` (no seleccionable en UI).
-- Resultado principal destacado (caja verde, texto centrado y grande).
-- Top-3 coincidencias con probabilidad.
-- Imagen del Pokemon Top-1 via PokeAPI.
+- Formulario con features manuales.
+- `Generation` fija en `1`.
+- Top-3 resultados con probabilidad.
+- Imagen del Top-1 consultada en PokeAPI.
 
-## Variables de entorno
+## Configuracion por variables de entorno
 
-`.env.example` ya esta alineado al modelo Pokemon.
-
-Ejemplo recomendado:
+Plantilla: `.env.example`
 
 ```bash
 MODEL_PATH=models/pokemon_knn_pipeline.joblib
-EXPECTED_COLUMNS="Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary"
+EXPECTED_COLUMNS=Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary
 PREDICTION_COLUMN=prediction
 ```
 
-Importante: tu codigo usa `os.getenv(...)`, asi que `.env` no se carga solo.
-
-Carga manual:
+Nota: el proyecto usa `os.getenv(...)`; `.env` no se carga automaticamente.
 
 ```bash
 set -a
@@ -154,26 +132,15 @@ set -a && source .env && set +a
 streamlit run src/app.py
 ```
 
-## Setup con Dev Container (recomendado para deploy)
+## Setup con Dev Container (recomendado para despliegue)
 
-Raiz de repo: `ml-production-app/`
+`Dockerfile.dev` instala `google-cloud-cli`, por lo que es el entorno ideal para `gcloud`.
 
-Config activa:
-
-- `.devcontainer/devcontainer.json` (dentro de `ml-production-app`)
-- build con `Dockerfile.dev`
-
-`Dockerfile.dev` instala `google-cloud-cli`, por eso este entorno es el indicado para `gcloud`.
-
-### Si `gcloud` no existe
-
-Normalmente significa que no estas dentro del contenedor reconstruido.
-
-Pasos:
+Si `gcloud` no aparece:
 
 1. VS Code: `Dev Containers: Rebuild and Reopen in Container`
-2. Nueva terminal
-3. Verificar:
+2. Abre nueva terminal
+3. Verifica:
 
 ```bash
 gcloud --version
@@ -185,17 +152,17 @@ gcloud --version
 pytest
 ```
 
-Estado actual esperado: tests verdes.
+Estado esperado actual: verde.
 
-## Docker (produccion)
+## Docker de produccion
 
-Build:
+Build local:
 
 ```bash
 docker build -f Dockerfile.prod -t ml-prediction-app:latest .
 ```
 
-Run:
+Run local:
 
 ```bash
 docker run --rm -p 4000:4000 \
@@ -205,91 +172,94 @@ docker run --rm -p 4000:4000 \
   ml-prediction-app:latest
 ```
 
-## Despliegue GCP
+## Despliegue en GCP (flujo usado y validado)
 
-Referencia completa: `commands.md`
+### Contexto real usado
 
-Variables sugeridas:
+- Proyecto: `project-ai-engineering`
+- Region: `us-central1`
+- Artifact Registry repo: `repo-compu-fest-pokemon`
+- Imagen: `image-v1-compu-fest-pokemon:latest`
+- Servicio Cloud Run: `ml-prediction-service`
 
-```bash
-export GCP_PROJECT_ID=your-gcp-project-id
-export GCP_REGION=us-central1
-export ARTIFACT_REPOSITORY=ml-model-serving
-export IMAGE_NAME=ml-prediction-app
-export IMAGE_TAG=latest
-export CLOUD_RUN_SERVICE=ml-prediction-service
-```
-
-Build + push con Cloud Build:
+### 1) Crear repositorio Docker en Artifact Registry (si aun no existe)
 
 ```bash
-gcloud builds submit \
-  --config cloudbuild.yaml \
-  --substitutions _GCP_REGION="${GCP_REGION}",_ARTIFACT_REPOSITORY="${ARTIFACT_REPOSITORY}",_IMAGE_NAME="${IMAGE_NAME}",_IMAGE_TAG="${IMAGE_TAG}" \
-  .
+gcloud artifacts repositories create repo-compu-fest-pokemon \
+  --repository-format docker \
+  --project project-ai-engineering \
+  --location us-central1
 ```
 
-Deploy Cloud Run:
+### 2) Build y push de imagen con Cloud Build
+
+`cloudbuild.yaml` ya apunta a la imagen real:
+
+- `us-central1-docker.pkg.dev/project-ai-engineering/repo-compu-fest-pokemon/image-v1-compu-fest-pokemon:latest`
+
+Ejecutar:
 
 ```bash
-gcloud run deploy "${CLOUD_RUN_SERVICE}" \
-  --image "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REPOSITORY}/${IMAGE_NAME}:${IMAGE_TAG}" \
-  --region "${GCP_REGION}" \
-  --platform managed \
-  --port 4000 \
-  --set-env-vars MODEL_PATH=models/pokemon_knn_pipeline.joblib,EXPECTED_COLUMNS="Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary",PREDICTION_COLUMN=prediction
+gcloud builds submit --config=cloudbuild.yaml --project project-ai-engineering
 ```
 
-## Checklist de continuidad (post-rebuild)
+### 3) Despliegue declarativo con `service.yaml`
 
-Ejecuta esto despues del rebuild para continuar rapido:
+`service.yaml` documenta y define:
 
-1. Entrar al repo:
+- nombre del servicio,
+- politica de ingress,
+- escalado min/max,
+- concurrencia,
+- imagen desplegada,
+- puerto del contenedor,
+- variables de entorno del modelo,
+- limites de CPU/memoria.
+
+Aplicar manifiesto:
 
 ```bash
-cd /workspaces/ml_for_production_talk/ml-production-app
+gcloud run services replace service.yaml \
+  --project project-ai-engineering \
+  --region us-central1
 ```
 
-2. Verificar entorno:
+### 4) Hacer publico el servicio
 
 ```bash
-gcloud --version
-python --version
+gcloud run services add-iam-policy-binding ml-prediction-service \
+  --project project-ai-engineering \
+  --region us-central1 \
+  --member="allUsers" \
+  --role="roles/run.invoker"
 ```
 
-3. Cargar variables:
+### 5) Obtener URL del servicio
 
 ```bash
-set -a && source .env && set +a
+gcloud run services describe ml-prediction-service \
+  --project project-ai-engineering \
+  --region us-central1 \
+  --format='value(status.url)'
 ```
 
-4. Probar app:
+## Troubleshooting rapido
 
-```bash
-streamlit run src/app.py
-```
+- Si Cloud Run no levanta la app, confirma que el contenedor escucha en el puerto esperado (`4000` en este proyecto).
+- Si falla el modelo, valida que exista `models/pokemon_knn_pipeline.joblib` dentro de la imagen.
+- Si PokeAPI falla, la app sigue funcionando pero puede no mostrar imagen del Pokemon.
+- Cargar solo modelos `pickle/joblib` de fuentes confiables.
 
-5. Probar tests:
+## Checklist de verificacion final
 
-```bash
-pytest
-```
+1. `pytest` en verde.
+2. `gcloud builds submit ...` en `SUCCESS`.
+3. `gcloud run services replace ...` sin errores.
+4. URL de Cloud Run responde y carga Streamlit.
+5. Flujo batch + quiz probado manualmente.
 
-6. Inicializar GCP:
+## Referencias
 
-```bash
-gcloud init
-gcloud auth application-default login
-```
-
-7. Seguir `commands.md` para Artifact Registry + Cloud Run.
-
-## Riesgos / notas
-
-- PokeAPI es dependencia externa de red (si falla, la app sigue pero puede no mostrar imagen).
-- El modelo usa pickle/joblib: cargar solo artefactos confiables.
-- No versionar secretos/credenciales.
-
-## Repo
-
-- GitHub: https://github.com/The-carlos/unam_talk
+- Guia de comandos extendida: `commands.md`
+- Politica IAM opcional: `gcr-service-policy.yaml`
+- Repo: https://github.com/The-carlos/unam_talk

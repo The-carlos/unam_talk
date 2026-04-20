@@ -1,29 +1,42 @@
+# API de Cloud Run (Knative Service).
 apiVersion: serving.knative.dev/v1
+# Tipo de recurso a desplegar.
 kind: Service
 metadata:
+  # Nombre del servicio en Cloud Run.
   name: ml-prediction-service
   annotations:
+    # Permite tráfico público/externo (internet + load balancers soportados).
     run.googleapis.com/ingress: all
 spec:
   template:
     metadata:
       annotations:
+        # Escalado mínimo: 0 para pagar solo cuando hay tráfico.
         autoscaling.knative.dev/minScale: "0"
+        # Escalado máximo para controlar costos/picos.
         autoscaling.knative.dev/maxScale: "5"
     spec:
+      # Máximo de requests concurrentes por instancia.
       containerConcurrency: 80
       containers:
-        - image: us-central1-docker.pkg.dev/your-gcp-project-id/ml-model-serving/ml-prediction-app:latest
+        - # Imagen exacta publicada en Artifact Registry.
+          image: us-central1-docker.pkg.dev/project-ai-engineering/repo-compu-fest-pokemon/image-v1-compu-fest-pokemon:latest
           ports:
-            - containerPort: 4000
+            - # Puerto interno en el que escucha Streamlit dentro del contenedor.
+              containerPort: 4000
           env:
-            - name: MODEL_PATH
+            - # Ruta del modelo dentro del filesystem del contenedor.
+              name: MODEL_PATH
               value: models/pokemon_knn_pipeline.joblib
-            - name: EXPECTED_COLUMNS
+            - # Lista ordenada de columnas esperadas por el pipeline.
+              name: EXPECTED_COLUMNS
               value: Type 1,Type 2,Total,HP,Attack,Defense,Sp. Atk,Sp. Def,Speed,Generation,Legendary
-            - name: PREDICTION_COLUMN
+            - # Nombre de la columna de salida en predicción batch.
+              name: PREDICTION_COLUMN
               value: prediction
           resources:
             limits:
+              # CPU/memoria máximas por instancia.
               cpu: "1"
               memory: 1Gi

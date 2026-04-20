@@ -1,7 +1,24 @@
 FROM python:3.11-slim-bookworm
 
-ENV CLOUDSDK_PYTHON=/usr/local/bin/python3
+# -----------------------------------------------------------------------------
+# Por qué fijamos CLOUDSDK_PYTHON a /usr/bin/python3 en esta imagen de desarrollo:
+#
+# En este repositorio instalamos dependencias de app de forma global con pip
+# (requirements-dev), y Streamlit arrastra protobuf 5.x a
+# /usr/local/lib/python3.11/site-packages.
+#
+# Si gcloud usa /usr/local/bin/python3, puede importar esa versión de protobuf y
+# fallar en algunos comandos (por ejemplo después de `gcloud init`) con:
+#   AttributeError: module 'google._upb._message' has no attribute 'MessageMapContainer'
+#
+# Para mantener aislados el stack de la app ML y el Cloud SDK sin añadir
+# complejidad extra de virtualenvs en esta demo, ejecutamos gcloud con el Python
+# del sistema (/usr/bin/python3), no con el de /usr/local.
+# -----------------------------------------------------------------------------
+# Fuerza a gcloud a usar Python del sistema y evita el choque con protobuf de pip.
+ENV CLOUDSDK_PYTHON=/usr/bin/python3
 
+# Paquetes mínimos para habilitar repositorios HTTPS y validar firmas.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-transport-https \
     ca-certificates \
@@ -9,10 +26,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Llave oficial del repositorio de Google Cloud.
 RUN curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg
 
+# Agrega el repo de Cloud SDK a APT.
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list
 
+# Herramientas base del contenedor y gcloud CLI para despliegue.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     vim \
@@ -20,10 +40,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     google-cloud-cli=473.0.0-0 \
     && rm -rf /var/lib/apt/lists/*
+# Versión de gcloud fijada para reproducibilidad de la demo.
 
+# Directorio de trabajo montado por el devcontainer.
 WORKDIR /ws/code
 
 COPY requirements.txt requirements-dev.txt ./
+# Instala dependencias de app (incluye streamlit/protobuf).
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements-dev.txt
 
-ENV PYTHONPATH=/ws/code/src
+# Permite imports absolutos tipo `from src...` dentro del contenedor.
+ENV PYTHONPATH=/ws/code

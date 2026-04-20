@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    MODEL_PATH=models/model.pkl \
+    MODEL_PATH=models/pokemon_knn_pipeline.joblib \
     PREDICTION_COLUMN=prediction
 
 WORKDIR /app
@@ -16,6 +16,6 @@ RUN pip install --upgrade pip \
 COPY src ./src
 COPY models ./models
 
-EXPOSE 4000
+EXPOSE 8080
 
-CMD ["streamlit", "run", "src/app.py", "--server.port=4000", "--server.address=0.0.0.0"]
+CMD ["sh", "-c", "streamlit run src/app.py --server.port=${PORT:-4000} --server.address=0.0.0.0"]
